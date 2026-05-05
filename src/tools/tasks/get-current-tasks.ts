@@ -23,6 +23,7 @@ async function handler(ctx: ToolContext, input: GetCurrentTasksInput) {
 
     const relevantTasks = allTasks.filter((task) => {
         if (task.status === 'completed') return false;
+        if (!task.due) return true;
         return ctx.isDueTodayOrOverdue(task.due);
     });
 
