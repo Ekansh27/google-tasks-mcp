@@ -18,39 +18,41 @@ const inputSchema = {
 
 
 async function handler(ctx: ToolContext, input: GetCurrentTasksInput) {
-    const listId = input.task_list_id || await ctx.getDefaultTaskListId();
-    const allTasks = await ctx.getTasks(listId, false);
-
-    const relevantTasks = allTasks.filter((task) => {
-        if (task.status === 'completed') return false;
-        if (!task.due) return true;
-        return ctx.isDueTodayOrOverdue(task.due);
-    });
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const taskLists = input.task_list_id 
+        ? [{ id: input.task_list_id }]
+        : await ctx.getTaskLists();
 
     const overdue: Task[] = [];
     const dueToday: Task[] = [];
     const noDueDate: Task[] = [];
 
-    for (const task of relevantTasks) {
-        if (!task.due) {
-            noDueDate.push(task);
-            continue;
-        }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-        const dueDate = new Date(task.due);
-        dueDate.setHours(0, 0, 0, 0);
-        if (dueDate < today) {
-            overdue.push(task);
-        } else {
-            dueToday.push(task);
+    for (const list of taskLists) {
+        const allTasks = await ctx.getTasks(list.id!, false);
+        const relevantTasks = allTasks.filter((task) => {
+            if (task.status === 'completed') return false;
+            if (!task.due) return true;
+            return ctx.isDueTodayOrOverdue(task.due);
+        });
+
+        for (const task of relevantTasks) {
+            if (!task.due) {
+                noDueDate.push(task);
+                continue;
+            }
+            const dueDate = new Date(task.due);
+            dueDate.setHours(0, 0, 0, 0);
+            if (dueDate < today) {
+                overdue.push(task);
+            } else {
+                dueToday.push(task);
+            }
         }
     }
 
     return createSuccessResponse({
-        task_list_id: listId,
         overdue: overdue.map(ctx.formatTask),
         due_today: dueToday.map(ctx.formatTask),
         no_due_date: noDueDate.map(ctx.formatTask),
@@ -58,7 +60,7 @@ async function handler(ctx: ToolContext, input: GetCurrentTasksInput) {
             overdue_count: overdue.length,
             due_today_count: dueToday.length,
             no_due_date_count: noDueDate.length,
-            total: relevantTasks.length
+            total: overdue.length + dueToday.length + noDueDate.length
         }
     });
 }
